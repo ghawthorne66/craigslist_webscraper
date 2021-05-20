@@ -1,5 +1,9 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio')
+const mongoose = require('mongoose')
+const clc = require("cli-color");
+const Listing = require("./model/Listing");
+require('dotenv').config()
 
 const scrapingResults = [
     {
@@ -7,12 +11,21 @@ const scrapingResults = [
         datePosted: new Date("2021-16-05"),
         neighborhood: 'Palo Alto',
         url:
-            ('https://lasvegas.craigslist.org/d/software-qa-dba-etc/search/sof?lang=en&cc=gb'),
+            (process.env.MONGO_URI),
         jobDescription: 'Major technology company seeking software engineer',
         compensation: 'Up to US $0.00 per year'
     }
 
 ]
+
+async function connectToMongoDb() {
+    await mongoose.connect(
+        `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@cluster0.3pze3.mongodb.net/${process.env.MONGO_DATABASE}?retryWrites=true&w=majority`,
+        {useNewUrlParser: true, useUnifiedTopology: true },
+    );
+
+    console.log(clc.green('=================\nConnected to MongoDb\n================'))
+}
 
 async function scrapeListings(page) {
     await page.goto("https://lasvegas.craigslist.org/d/software-qa-dba-etc/search/sof?lang=en&cc=gb")
@@ -48,20 +61,27 @@ async function scrapeJobDescriptions(listings, page) {
         listings[i].compensation = compensation;
         console.log(listings[i].jobDescription);
         console.log(listings[i].compensation);
+        const listingModel = new Listing(listings[i]);
+        await listingModel.save();
         await sleep(3000);
     }
-}
-
-async function main() {
-    const browser = await puppeteer.launch({headless: false});
-    const page = await browser.newPage();
-    const listings = await scrapeListings(page);
-    const listingsWithJobDescriptions = await scrapeJobDescriptions(listings, page);
-
 }
 
 async function sleep(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
+
+async function main() {
+    await connectToMongoDb();
+    const browser = await puppeteer.launch({headless: false});
+    const page = await browser.newPage();
+    const listings = await scrapeListings(page);
+    const listingsWithJobDescriptions = await scrapeJobDescriptions(
+        listings,
+        page
+    );
+    console.log(listings);
+}
+
 
 main();
